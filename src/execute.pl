@@ -1,6 +1,6 @@
 #!c:\perl\bin\perl.exe
 #=============================================================================
-#   @(#)$Id: execute.pl,v 1.12 2011/10/25 05:06:43 stedwar2 Exp $
+#   @(#)$Id: execute.pl,v 1.3 2008/03/24 01:25:53 stedwar2 Exp $
 #-----------------------------------------------------------------------------
 #   Web-CAT Curator: execute script for Java submissions
 #
@@ -11,7 +11,6 @@
 use strict;
 use warnings;
 use Carp qw( carp croak );
-use Cwd qw( getcwd abs_path );
 use File::Basename;
 use File::Copy;
 use File::Spec;
@@ -19,14 +18,11 @@ use File::stat;
 use Proc::Background;
 use Config::Properties::Simple;
 use Web_CAT::Beautifier;
-use Web_CAT::CLOC;
 use Web_CAT::FeedbackGenerator;
-use Web_CAT::JUnitResultsReader;
-use Web_CAT::DerefereeStatsReader;
 use Web_CAT::Utilities;
 use Text::Tabs;
 use XML::Smart;
-use Data::Dump qw( dump );
+#use Data::Dump qw( dump );
 
 die "ANT_HOME environment variable is not set"
     if !defined( $ENV{ANT_HOME} );
@@ -49,13 +45,6 @@ my $reportCount = $cfg->getProperty( 'numReports', 0 );
 my $maxCorrectnessScore   = $cfg->getProperty( 'max.score.correctness' );
 my $maxToolScore          = $cfg->getProperty( 'max.score.tools', 0 );
 my $NTprojdir             = $working_dir . "/";
-
-my %status = (
-    'studentTestResults'    => undef,
-    'instrTestResults'      => undef,
-    'studentDerefereeStats' => undef,
-    'instrDerefereeStats'   => undef,
-);
 
 
 #-------------------------------------------------------
@@ -119,14 +108,6 @@ if ( !$measureCodeCoverage )
 my @beautifierIgnoreFiles = ();
 
 $ENV{'COVFILE'} = $covfile;
-
-my $bullseyeDir = $cfg->getProperty( 'bullseyeDir' );
-my $pathSep = $cfg->getProperty( 'PerlForPlugins.path.separator', ':' );
-
-if ( defined $bullseyeDir )
-{
-    $ENV{'PATH'} = $bullseyeDir . '/bin' . $pathSep . $ENV{'PATH'}
-}
 
 
 #=============================================================================
@@ -241,68 +222,6 @@ my $testCasePattern = $cfg->getProperty( 'testCasePattern' );
 my $unixTestCasePath = $testCasePath;
 $unixTestCasePath =~ s,\\,/,g;
 
-sub regexize_path
-{
-    # transform a path to a suffix-finding RE like this:
-    # from: /a/b/c/d
-    # to: ((../)+|/)((((a/)?b/)?c/)?d/)
-
-    my $path = shift;
-
-    $path =~ m,^/?(.*)/?$,;
-    $path = $1;
-    my $result = "";
-
-    my @components = split( /\//, $path );
-    foreach my $i ( 0 .. $#components )
-    {
-        my $comp = $components[$i];
-        $result = "(" . $result . quotemeta($comp) . "/)";
-        $result .= "?" if ( $i < $#components );
-    }
-
-    return $result;
-}
-
-sub sanitize_path
-{
-    my $path = shift;
-    my $dir1;
-    my $dir2;
-    my $re;
-
-    $dir1 = regexize_path( $working_dir );
-    $dir2 = regexize_path( abs_path( $working_dir ) );
-    $re = "((\\.\\./)+|/)(" . $dir1 . "|" . $dir2 . ")";
-    $path =~ s,$re,,gi;
-
-    return $path;
-}
-
-sub path_contains_part_of_path
-{
-    my $path = shift;
-    my $destpath = shift;
-
-    my $dir1;
-    my $dir2;
-    my $re;
-
-    $dir1 = regexize_path( $destpath );
-    $dir2 = regexize_path( abs_path( $destpath ) );
-    $re = "((\\.\\./)+|/)(" . $dir1 . "|" . $dir2 . ")";
-
-    if ( $path =~ /$re/ )
-    {
-        return 1;
-    }
-    else
-    {
-        return 0;
-    }
-}
-
-
 sub prep_for_output
 {
     my $result = shift;
@@ -325,7 +244,6 @@ sub prep_for_output
     # print "\t4: $result";
     $result =~ s,([a-z]:)?\Q$NTprojdir\E(/)?,,gi;
     $result =~ s,([a-z]:)?\Q$DOSStyle_NTprojdir\E(/)?,,gi;
-    $result = sanitize_path( $result );
 
     $result =~ s,([a-z]:)?\Q$testCasePath\E(/)?[^:\s]*\.h,<<reference tests>>,gi;
     $result =~ s,([a-z]:)?\Q$testCasePath\E(/)?,,gi;
@@ -450,24 +368,9 @@ if ( $callAnt )
     print $cmdline, "\n" if ( $debug );
     if ( $useSpawn )
     {
-        # Changing the HOME directory is a hack to make Bullseye work
-        # correctly on Unix.  It tries to put a .BullseyeCoverage file in
-        # the user's home directory, and when running under Tomcat, this
-        # home dir might be the Tomcat root, which may not be writable.
-        # We change it here to the working directory while ant is running.
-
-        my $old_home = $ENV{'HOME'};
-        $ENV{'HOME'} = $working_dir;
-
-        my ( $exitcode, $timeout_status ) = Proc::Background::timeout_system(
-                $timeout - $postProcessingTime, $cmdline );
-
-        if (defined($old_home))
-        {
-            $ENV{'HOME'} = $old_home;
-        }
-
-        if ( $timeout_status )
+            my ( $exitcode, $timeout_status ) = Proc::Background::timeout_system(
+            $timeout - $postProcessingTime, $cmdline );
+    if ( $timeout_status )
         {
             $can_proceed = 0;
             my $feedbackGenerator =
@@ -1076,18 +979,6 @@ EOF
             $can_proceed = 0;
         }
     }
-
-    #
-    # Collect student and instructor results from the plist printer
-    #
-    $status{'studentTestResults'} =
-        new Web_CAT::JUnitResultsReader( "$log_dir/student.inc" );
-    $status{'instrTestResults'} =
-        new Web_CAT::JUnitResultsReader( "$log_dir/instr.inc" );
-    $status{'studentDerefereeStats'} =
-        new Web_CAT::DerefereeStatsReader( "$log_dir/student-dereferee.inc" );
-    $status{'instrDerefereeStats'} =
-        new Web_CAT::DerefereeStatsReader( "$log_dir/instr-dereferee.inc" );
 }
 elsif ( $debug ) { print "instructor test results analysis skipped\n"; }
 
@@ -1229,52 +1120,6 @@ my %codeMarkupIds = ();
 # }
 my %codeMessages = ();
 
-sub exclude_from_coverage
-{
-    my $fqFileName = shift;
-
-    if ( $fqFileName =~ m,^\.\./, )
-    {
-        my $old_cwd = getcwd();
-        chdir $working_dir;
-        $fqFileName = abs_path( $fqFileName );
-        chdir $old_cwd;
-    }
-
-    if ( path_contains_part_of_path( $fqFileName, $scriptData )
-             || ( defined( $assignmentIncludes ) &&
-                  path_contains_part_of_path( $fqFileName, $assignmentIncludes ) )
-             || ( defined( $generalIncludes ) &&
-                  path_contains_part_of_path( $fqFileName, $generalIncludes) ) )
-    {
-        return 1;
-    }
-    else
-    {
-        return 0;
-    }
-}
-
-sub strip_quotes_and_normalize
-{
-    my $fqFileName = shift;
-
-    if ( length( $fqFileName ) > 0
-         && substr( $fqFileName, 0, 1 ) eq '"' )
-    {
-        $fqFileName = substr( $fqFileName, 1 );
-    }
-    if ( length( $fqFileName ) > 0
-         && substr( $fqFileName, -1 ) eq '"' )
-    {
-        $fqFileName = substr( $fqFileName, 0, -1 );
-    }
-
-    $fqFileName =~ s,\\,/,go;
-
-    return $fqFileName;
-}
-
 if ( $testsRun && $measureCodeCoverage )
 {
     my $coverageLog    = "$log_dir/covfile.out";
@@ -1287,10 +1132,14 @@ if ( $testsRun && $measureCodeCoverage )
             chomp;
             my @entry = split( /,/ );
             next if ( $#entry < 6 );
-            my $normalizedFile = strip_quotes_and_normalize( $entry[0] );
-
-            next if exclude_from_coverage( $normalizedFile );
-
+            my $normalizedFile = $entry[0];
+            $normalizedFile =~ s,\\,/,g;
+            next if (   $normalizedFile =~ m/\Q$scriptData\E/o
+                     || ( defined( $assignmentIncludes ) &&
+                          $normalizedFile =~ m/^\Q$assignmentIncludes\E/o )
+                     || ( defined( $generalIncludes ) &&
+                          $normalizedFile =~ m/^\Q$generalIncludes\E/o )
+                    );
             $topLevelGradedElements += $entry[2];
             if ( $coverageMetric == 2 )
             {
@@ -1324,11 +1173,26 @@ if ( $testsRun && $measureCodeCoverage )
                 chomp;
                 my @entry = split( /,/ );
                 next if ( $#entry < 6 );
-                my $fqFileName = strip_quotes_and_normalize( $entry[0] );
-
-                next if exclude_from_coverage( $fqFileName );
-
-                $fqFileName = sanitize_path( $fqFileName );
+                my $fqFileName = $entry[0];
+                # $fqFileName =~ s/^(\")?([^\"]*)(\")?$/$2/o;
+                if ( length( $fqFileName ) > 0
+                     && substr( $fqFileName, 0, 1 ) eq '"' )
+                {
+                    $fqFileName = substr( $fqFileName, 1 );
+                }
+                if ( length( $fqFileName ) > 0
+                     && substr( $fqFileName, -1 ) eq '"' )
+                {
+                    $fqFileName = substr( $fqFileName, 0, -1 );
+                }
+                $fqFileName =~ s,\\,/,go;
+                next if (   $fqFileName =~ m/\Q$scriptData\E/o
+                         || ( defined( $assignmentIncludes ) &&
+                              $fqFileName =~ m/^\Q$assignmentIncludes\E/o )
+                         || ( defined( $generalIncludes ) &&
+                              $fqFileName =~ m/^\Q$generalIncludes\E/o )
+                        );
+                $fqFileName =~ s,^\Q${working_dir}\E(/)*,,o;
 
                 if ( $debug > 2 )
                 {
@@ -1403,11 +1267,14 @@ if ( $testsRun && $measureCodeCoverage )
                 chomp;
                 my @entry = split( /,/ );
                 next if ( $#entry < 5 );
-                $entry[0] = strip_quotes_and_normalize( $entry[0] );
-
-                next if exclude_from_coverage( $entry[0] );
-
-                $entry[0] = sanitize_path( $entry[0] );
+                $entry[0] =~ s,\\,/,go;
+                next if (   $entry[0] =~ m/\Q$scriptData\E/o
+                         || ( defined( $assignmentIncludes ) &&
+                              $entry[0] =~ m/^\Q$assignmentIncludes\E/o )
+                         || ( defined( $generalIncludes ) &&
+                              $entry[0] =~ m/^\Q$generalIncludes\E/o )
+                        );
+                $entry[0] =~ s,^\Q${working_dir}\E(/)*,,o;
                 if ( $entry[3] eq "function" && $entry[4] eq "" )
                 {
                     if ( !defined $codeMessages{$entry[0]} )
@@ -1439,16 +1306,20 @@ if ( $testsRun && $measureCodeCoverage )
                 chomp;
                 if ( m/^(\S*):$/o )
                 {
-                    $thisFile = strip_quotes_and_normalize( $1 );
-
-                    if ( exclude_from_coverage( $thisFile ) )
+                    $thisFile = $1;
+                    $thisFile =~ s,\\,/,go;
+                    if (   $thisFile =~ m/\Q$scriptData\E/o
+                        || ( defined( $assignmentIncludes ) &&
+                             $thisFile =~ m/^\Q$assignmentIncludes\E/o )
+                        || ( defined( $generalIncludes ) &&
+                             $thisFile =~ m/^\Q$generalIncludes\E/o )
+                       )
                     {
                         $thisFile = undef;
                     }
                     else
                     {
-                        #$thisFile =~ s,^\Q${working_dir}\E(/)*,,o;
-                        $thisFile = sanitize_path( $thisFile );
+                        $thisFile =~ s,^\Q${working_dir}\E(/)*,,o;
                     }
                     next;
                 }
@@ -1629,93 +1500,6 @@ if ( -f $instrLog && stat( $instrLog )->size > 0 )
 }
 
 
-if ( defined $status{'studentTestResults'}
-     && $status{'studentTestResults'}->hasResults )
-{
-    $cfg->setProperty('student.test.results',
-                      $status{'studentTestResults'}->plist);
-    $cfg->setProperty('student.test.executed',
-                      $status{'studentTestResults'}->testsExecuted);
-    $cfg->setProperty('student.test.passed',
-                      $status{'studentTestResults'}->testsExecuted
-                      - $status{'studentTestResults'}->testsFailed);
-    $cfg->setProperty('student.test.failed',
-                      $status{'studentTestResults'}->testsFailed);
-    $cfg->setProperty('student.test.passRate',
-                      $status{'studentTestResults'}->testPassRate);
-    $cfg->setProperty('student.test.allPass',
-                      $status{'studentTestResults'}->allTestsPass);
-    $cfg->setProperty('student.test.allFail',
-                      $status{'studentTestResults'}->allTestsFail);
-}
-if ( defined $status{'instrTestResults'}
-     && $status{'instrTestResults'}->hasResults )
-{
-    $cfg->setProperty('instructor.test.results',
-                      $status{'instrTestResults'}->plist);
-    $cfg->setProperty('instructor.test.executed',
-                      $status{'instrTestResults'}->testsExecuted);
-    $cfg->setProperty('instructor.test.passed',
-                      $status{'instrTestResults'}->testsExecuted
-                      - $status{'instrTestResults'}->testsFailed);
-    $cfg->setProperty('instructor.test.failed',
-                      $status{'instrTestResults'}->testsFailed);
-    $cfg->setProperty('instructor.test.passRate',
-                      $status{'instrTestResults'}->testPassRate);
-    $cfg->setProperty('instructor.test.allPass',
-                      $status{'instrTestResults'}->allTestsPass);
-    $cfg->setProperty('instructor.test.allFail',
-                      $status{'instrTestResults'}->allTestsFail);
-}
-if ( defined $status{'studentDerefereeStats'}
-     && $status{'studentDerefereeStats'}->hasResults )
-{
-    $cfg->setProperty('student.memory.numLeaks',
-                      $status{'studentDerefereeStats'}->numLeaks);
-    $cfg->setProperty('student.memory.leakRate',
-                      $status{'studentDerefereeStats'}->leakRate);
-    $cfg->setProperty('student.memory.totalBytesAllocated',
-                      $status{'studentDerefereeStats'}->totalMemoryAllocated);
-    $cfg->setProperty('student.memory.maxBytesInUse',
-                      $status{'studentDerefereeStats'}->maxMemoryInUse);
-    $cfg->setProperty('student.memory.numCallsToNew',
-                      $status{'studentDerefereeStats'}->numCallsToNew);
-    $cfg->setProperty('student.memory.numCallsToDelete',
-                      $status{'studentDerefereeStats'}->numCallsToDelete);
-    $cfg->setProperty('student.memory.numCallsToArrayNew',
-                      $status{'studentDerefereeStats'}->numCallsToArrayNew);
-    $cfg->setProperty('student.memory.numCallsToArrayDelete',
-                      $status{'studentDerefereeStats'}->numCallsToArrayDelete);
-    $cfg->setProperty('student.memory.numCallsToDeleteNull',
-                      $status{'studentDerefereeStats'}->numCallsToDeleteNull);
-}
-if ( defined $status{'instrDerefereeStats'}
-     && $status{'instrDerefereeStats'}->hasResults )
-{
-    $cfg->setProperty('instructor.memory.numLeaks',
-                      $status{'instrDerefereeStats'}->numLeaks);
-    $cfg->setProperty('instructor.memory.leakRate',
-                      $status{'instrDerefereeStats'}->leakRate);
-    $cfg->setProperty('instructor.memory.totalBytesAllocated',
-                      $status{'instrDerefereeStats'}->totalMemoryAllocated);
-    $cfg->setProperty('instructor.memory.maxBytesInUse',
-                      $status{'instrDerefereeStats'}->maxMemoryInUse);
-    $cfg->setProperty('instructor.memory.numCallsToNew',
-                      $status{'instrDerefereeStats'}->numCallsToNew);
-    $cfg->setProperty('instructor.memory.numCallsToDelete',
-                      $status{'instrDerefereeStats'}->numCallsToDelete);
-    $cfg->setProperty('instructor.memory.numCallsToArrayNew',
-                      $status{'instrDerefereeStats'}->numCallsToArrayNew);
-    $cfg->setProperty('instructor.memory.numCallsToArrayDelete',
-                      $status{'instrDerefereeStats'}->numCallsToArrayDelete);
-    $cfg->setProperty('instructor.memory.numCallsToDeleteNull',
-                      $status{'instrDerefereeStats'}->numCallsToDeleteNull);
-}
-
-$cfg->setProperty('outcomeProperties',
-                  '("instructor.test.results", "student.test.results")');
-
-
 #=============================================================================
 # generate score explanation for student
 #=============================================================================
@@ -1782,45 +1566,6 @@ $beautifier->beautifyCwd( $cfg,
                           \%codeMarkupIds,
                           \%codeMessages );
 
-
-#=============================================================================
-# Use CLOC to calculate lines of code statistics
-#=============================================================================
-
-my @cloc_files = ();
-my $numCodeMarkups = $cfg->getProperty( 'numCodeMarkups', 0 );
-
-for (my $i = 1; $i <= $numCodeMarkups; $i++)
-{
-    my $cloc_file = $cfg->getProperty(
-        "codeMarkup${i}.sourceFileName", undef);
-
-    push @cloc_files, $cloc_file if defined $cloc_file;
-}
-
-print "Passing these files to CLOC: @cloc_files\n" if ( $debug > 2 );
-
-if (@cloc_files)
-{
-    my $cloc = new Web_CAT::CLOC;
-    $cloc->execute(@cloc_files);
-
-    for (my $i = 1; $i <= $numCodeMarkups; $i++)
-    {
-        my $cloc_file = $cfg->getProperty(
-            "codeMarkup${i}.sourceFileName", undef);
-
-        my $cloc_metrics = $cloc->fileMetrics($cloc_file);
-        next unless defined $cloc_metrics;
-
-        $cfg->setProperty(
-            "codeMarkup${i}.loc",
-            $cloc_metrics->{blank} + $cloc_metrics->{comment} + $cloc_metrics->{code} );
-        $cfg->setProperty(
-            "codeMarkup${i}.ncloc",
-            $cloc_metrics->{blank} + $cloc_metrics->{code} );
-    }
-}
 
 #=============================================================================
 # Update and rewrite properties to reflect status
