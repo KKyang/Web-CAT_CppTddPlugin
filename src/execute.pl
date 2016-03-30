@@ -79,10 +79,12 @@ my $instructorTestsFailed  = 0;
 my $instructorCasesPercent = 0;
 my $gradedElements         = 0;
 my $gradedElementsCovered  = 0;
-my $studentCasesPercent    = 0;
+my $studentTestPassBool    = 1;
+my $studentCasesPercent    = 100;
 my $codeCoveragePercent    = 0;
 my $studentTestTitle;
 my $studentTestMsgs;
+my $instructorTestMsgs;
 my $totalToolDeductions    = 0;
 my $antLogOpened           = 0;
 
@@ -581,12 +583,7 @@ if ( $can_proceed )
     while ( defined( $_ )  &&  ( s/^\s*\[exec\] //o || m/^$/o ) )
     {
         # print "msg: $_";
-        if ( m/^running\s*([0-9]+)\s*test(s)?/io )
-        {
-            print "stats: $_" if ( $debug > 1 );
-            $testsRun     += $1;
-        }
-        elsif ( m/^failed\s*([0-9]+)\s*of\s*([0-9]+)\s*test(s)?/io )
+        if ( m/^failed\s*([0-9]+)\s*of\s*([0-9]+)\s*test(s)?/io )
         {
             print "stats: $_" if ( $debug > 1 );
             $testsFailed  += $1;
@@ -609,6 +606,7 @@ looping</b>--when a while loop or for loop fails to stop repeating.</p>
 <p>As a result, no time remained for further analysis of your code.</p>
 \n";
         $testsFailed++;
+        $can_proceed = 0;
     }
     if ( $testsFailed && $allStudentTestsMustPass )
     {
@@ -617,24 +615,26 @@ looping</b>--when a while loop or for loop fails to stop repeating.</p>
         $can_proceed = 0;
     }
     $studentTestTitle = "Results From Running Your Tests";
-    if ( $testsRun == 0 || $testsFailed > 0 )
+    if ( $testsFailed > 0 )
     {
         $studentTestTitle   = "Errors Running Your Tests";
+        $studentTestPassBool = 0;
     }
     if ( $testsRun == 0 )
     {
-        $can_proceed = 0;
+        #$can_proceed = 0;
         $testMsgs .=
-        "\n<font color=\"#ee00bb\">No tests included in submission.</font>";
+        "\n<font color=\"#ee00bb\">Student test passed.</font>";
     }
 
-    $studentCasesPercent = $testsRun > 0 ? int(
-        ( ( $testsRun - $testsFailed ) / $testsRun ) * 100.0 + 0.5 )
-        : 0;
     if ( $testsFailed && $studentCasesPercent == 100 )
     {
         # Don't show 100% if some cases failed
-        $studentCasesPercent--;
+        $studentCasesPercent-=20;
+        if($studentCasesPercent < 0)
+        {
+            $studentCasesPercent = 0;
+        }
     }
 
     if ( -f "memwatch.log" )
@@ -754,6 +754,7 @@ if ( $can_proceed )
     my $resultsSeen = 0;
     my $timeoutOccurred = 0;
     my $memwatchLog = "";
+    my $testMsgs = "";
     if ( !defined( $_ ) || $_ !~ m/^\s*\[exec\]\s+/ )
     {
         adminLog( "Failed to find [exec] in line:\n"
@@ -814,9 +815,10 @@ if ( $can_proceed )
         {
             $resultsSeen++;
         }
-        # $testMsgs .= prep_for_output( $_ );
+        $testMsgs .= prep_for_output( $_ );
         $_ = <ANTLOG>;
     }
+    $instructorTestMsgs = $testMsgs;
 
     if ( !$resultsSeen && $instructorTestsRun > 0 )
     {
@@ -872,7 +874,14 @@ if ( $can_proceed )
     my $feedbackGenerator = new Web_CAT::FeedbackGenerator( $instrLog );
     $feedbackGenerator->startFeedbackSection(
         "Estimate of Problem Coverage" );
-
+if(defined( $instructorTestMsgs ))
+{
+$feedbackGenerator->print( <<EOF );
+<pre>
+$instructorTestMsgs
+</pre>
+EOF
+}
     if ( $timeoutOccurred )
     {
         $feedbackGenerator->print( <<EOF );
@@ -1022,7 +1031,8 @@ if ( $can_proceed )
     }
 
     # First, the static analysis, tool-based score
-    my $staticScore  = $maxToolScore - $totalToolDeductions;
+    #my $staticScore  = $maxToolScore - $totalToolDeductions;
+    $staticScore = $maxToolScore * ($studentCasesPercent / 100.0);
 
     # Second, the coverage/testing/correctness component
     $runtimeScore = $runtimeScoreWithoutCoverage;
@@ -1442,7 +1452,7 @@ if ( defined( $studentTestMsgs ) )
 $studentTestMsgs
 </pre>
 EOF
-    if ( $testsRun > 0 )
+    if ( $testsRun >= 0 )
     {
         $feedbackGenerator->print( "<p><b>Test Pass Rate: " );
         if ( $studentCasesPercent < 100 )
@@ -1505,7 +1515,7 @@ if ( -f $instrLog && stat( $instrLog )->size > 0 )
 #=============================================================================
 if ( $can_proceed )
 {
-    my $scoreToTenths = int( $runtimeScore * 10 + 0.5 ) / 10;
+    my $scoreToTenths = int($runtimeScore + $staticScore);
     if ( $instructorTestsRun == 0
          || $instructorTestsFailed == $instructorTestsRun )
     {
@@ -1537,7 +1547,7 @@ EOF
 <td>(how much of the problem your solution/tests cover)</td></tr>
 </table>
 <p>Your Correctness/Testing score is calculated this way:</p>
-<p>score = $maxCorrectnessScore * $studentCasesPercent%
+<p>score = $maxToolScore * $studentCasesPercent% + $maxCorrectnessScore
 EOF
     if ( $coverageMetric )
     {
