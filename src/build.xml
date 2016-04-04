@@ -106,6 +106,15 @@
     <mkdir dir="${build}"/>
     </target>
 
+    
+    <target name="checkStudentStyle"
+        description="check using cppcheck from student's submission">
+    <exec executable="cppcheck">
+        <arg value="--enable=all"/>
+        <arg value="${basedir}"/>
+    </exec>
+    </target>
+
 
     <target name="generateStudentMain"
         description="generate runStudentTests.cpp from student's tests">
@@ -185,8 +194,9 @@
 
 
     <target name="compile"
-        depends="init,generateStudentMain,enable.coverage,disable.coverage"
+        depends="init,enable.coverage,disable.coverage"
         description="compile student's code">
+    <!--depends delete generateStudentMain-->
     <cc    name="g++"
            objdir="${build}"
            outfile="${student.tests}"
@@ -360,6 +370,6 @@
          ============================================================ -->
 
     <target name="run"
-            depends="init, clean, test, instructorTest, final-clean"/>
+            depends="init, clean, checkStudentStyle, test, instructorTest, final-clean"/>
 
 </project>

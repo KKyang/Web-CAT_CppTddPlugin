@@ -64,6 +64,8 @@ my $testLogRelative    = "test.log";
 my $testLog            = "$log_dir/$testLogRelative";
 my $instrLogRelative   = "instr.log";
 my $instrLog           = "$log_dir/$instrLogRelative";
+my $analLogRelative    = "anal.log";
+my $analLog            = "$log_dir/$analLogRelative";
 my $timeoutLogRelative = "timeout.log";
 my $timeoutLog         = "$log_dir/$timeoutLogRelative";
 my $markupPropFile     = "$script_home/markup.properties";
@@ -445,7 +447,79 @@ sub adminLog {
     close( SCRIPTLOG );
 }
 
+#=============================================================================
+# check to see if cppcheck works!
+#=============================================================================
+if ( $can_proceed )
+{
+    open( ANTLOG, "$antLog" ) ||
+        die "Cannot open file for input '$antLog': $!";
+    $antLogOpened++;
+    my $testMsgs="";
+    my $styleCount = 0;
+    my $errorCount = 0;
 
+    $_ = <ANTLOG>;
+    scanTo( qr/^checkStudentStyle:/ );
+    scanTo( qr/^\s*\[exec\]/ );
+
+    if ( !defined( $_ ) || $_ !~ m/^\s*\[exec\]\s+/ )
+    {
+        $can_proceed = 0;
+    }
+
+    while ( defined( $_ )  &&  ( s/^\s*\[exec\] //o || m/^$/o ) )
+    {
+        if(m/^\[\S*[A-Za-z0-9]\]: \(style\)/io)
+        {
+            $styleCount++;
+        }
+        elsif (m/^\[\S*[A-Za-z0-9]\]: \(error\)/io)
+        {
+        }
+
+        $testMsgs .= prep_for_output( $_ );
+        $_ = <ANTLOG>;
+    }
+
+     my $feedbackGenerator = new Web_CAT::FeedbackGenerator( $analLog );
+     $feedbackGenerator->startFeedbackSection(
+            "Cpp analysis with cppcheck" );
+            $feedbackGenerator->print( <<EOF );
+<pre>
+$testMsgs
+</pre>
+EOF
+
+        $feedbackGenerator->print( <<EOF );
+<p><b>Style check found: <font color="#ee00bb">$styleCount</font></b></p><p>
+<p>
+<font color="#ee00bb">Style error found.</p>
+EOF
+
+    if($errorCount > 0)
+    {
+        $can_proceed = 0;
+        $feedbackGenerator->print( <<EOF );
+<p><b>Error check found: <font color="#ee00bb">$errorCount</font></b></p><p>
+<p>
+<font color="#ee00bb">Logic error occurred, fail to proceed.</p>
+EOF
+    }
+
+
+        $feedbackGenerator->endFeedbackSection;
+        $feedbackGenerator->close;
+
+        # Add to list of reports
+        # -----------
+        $reportCount++;
+        $cfg->setProperty( "report${reportCount}.file", $analLogRelative );
+        $cfg->setProperty( "report${reportCount}.mimeType", "text/html" );
+}
+elsif ( $debug ) { print "cppcheck analysis skipped\n"; }
+
+=begin comment
 #=============================================================================
 # check to see if student tests are really there!
 #=============================================================================
@@ -460,7 +534,7 @@ if ( $can_proceed )
     $_ = <ANTLOG>;
     if ( defined( $_ ) && m/^\s*\[apply\].*(usage|no tests defined)/io )
     {
-        $can_proceed = 0;
+        #$can_proceed = 0;
         open( TESTLOG, ">$testLog" ) ||
             die "Cannot open file for output '$testLog': $!";
         print TESTLOG<<EOF;
@@ -477,7 +551,8 @@ EOF
     }
 }
 elsif ( $debug ) { print "cxxtest student generation analysis skipped\n"; }
-
+=end comment
+=cut
 
 #=============================================================================
 # check for compiler errors (or warnings) on student test cases
