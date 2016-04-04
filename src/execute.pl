@@ -76,6 +76,8 @@ my $can_proceed        = 1;
 my $runtimeScore       = 0;
 my $staticScore        = 0;
 
+my $cppcheckStyleCount     = 0;
+my $cppcheckErrorCount     = 0;
 my $instructorTestsRun     = 0;
 my $instructorTestsFailed  = 0;
 my $instructorCasesPercent = 0;
@@ -476,11 +478,14 @@ if ( $can_proceed )
         }
         elsif (m/^\[\S*[A-Za-z0-9]\]: \(error\)/io)
         {
+            $errorCount++;
         }
 
         $testMsgs .= prep_for_output( $_ );
         $_ = <ANTLOG>;
     }
+    $cppcheckStyleCount     = $styleCount;
+    $cppcheckErrorCount     = $errorCount;
 
      my $feedbackGenerator = new Web_CAT::FeedbackGenerator( $analLog );
      $feedbackGenerator->startFeedbackSection(
@@ -1081,14 +1086,25 @@ if ( $antLogOpened )
 # tracking covered elements is not currently supported
 $runtimeScore = 0;
 my $runtimeScoreWithoutCoverage = 0;
+my $cppcheckScore = 0;
+
+my $maxCount   =   8;
+my $scoreCount =   $maxCount;
+$scoreCount    -=  $cppcheckStyleCount;
+$scoreCount    -=  $cppcheckErrorCount;
+
+if($scoreCount < 0)
+{
+    $scoreCount = 0;
+}
 
 if ( $can_proceed )
 {
     if ( $instructorTestsRun == 0 ) { $instructorTestsRun = 1; }
     $runtimeScoreWithoutCoverage =
-        $maxCorrectnessScore
-        * ( ( $instructorTestsRun - $instructorTestsFailed )
-            / $instructorTestsRun );
+        $maxToolScore
+        * (( ( $instructorTestsRun - $instructorTestsFailed )
+            / $instructorTestsRun ) + ($scoreCount/$maxCount)) * 0.5;
 
     # No credit unless all student tests pass
     if ( $testsFailed )
@@ -1107,11 +1123,16 @@ if ( $can_proceed )
 
     # First, the static analysis, tool-based score
     #my $staticScore  = $maxToolScore - $totalToolDeductions;
-    $staticScore = $maxToolScore * ($studentCasesPercent / 100.0);
+    $staticScore = $runtimeScoreWithoutCoverage;
 
     # Second, the coverage/testing/correctness component
-    $runtimeScore = $runtimeScoreWithoutCoverage;
+    $runtimeScore = $maxCorrectnessScore * ($studentCasesPercent / 100.0);
 }
+else
+{
+    $runtimeScore = 0;
+    $staticScore = $maxToolScore * ($scoreCount/$maxCount);
+}    
 
 
 #=============================================================================
