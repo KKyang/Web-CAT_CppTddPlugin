@@ -1091,7 +1091,7 @@ my $cppcheckScore = 0;
 my $maxCount   =   8;
 my $scoreCount =   $maxCount;
 $scoreCount    -=  $cppcheckStyleCount;
-$scoreCount    -=  $cppcheckErrorCount;
+$scoreCount    -=  $cppcheckErrorCount * 2;
 
 if($scoreCount < 0)
 {
