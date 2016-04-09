@@ -1,29 +1,38 @@
 {
-    name             = CppTddPluginDev;
+    name             = CppTddPlugin;
     version.major    = 2;
-    version.minor    = 4;
-    version.revision = 1;
-    version.date     = 20101201;
-    autoPublish      = false;
+    version.minor    = 3;
+    version.revision = 2;
+    version.date     = 20080415;
+    autoPublish      = true;
     requires         = ( ANTForPlugins, PerlForPlugins );
     provider         = "Virginia Tech Computer Science";
     provider.url     = "http://web-cat.cs.vt.edu/updates";
     license          = "GNU Affero General Public License v.3";
     license.url      = "http://www.gnu.org/licenses/agpl.html";
-    copyright        = "(c) 2006-2009 Virginia Tech Department of Computer Science";
+    copyright        = "(c) 2006-2008 Virginia Tech Department of Computer Science";
     info.url         = "http://web-cat.cs.vt.edu/WCWiki/CppTddPlugin";
     history.url      = "http://web-cat.cs.vt.edu/WCWiki/CppTddPlugin/ChangeHistory";
     executable       = execute.pl;
     interpreter.prefix = "${PerlForPlugins.perl.exe}";
     author     = "Stephen Edwards (edwards@cs.vt.edu)";
     authorUid  = edwards;
-    languages  = ( { name = "C++"; version = "g++ 3.4.x/4.x"; } );
+    languages  = ( { name = "C++"; version = "g++ 3.4.x"; } );
     description = "This is the standard C++ one-step grading script.
 It includes ANT-based compilation, CxxTest processing of student-written
 tests, and support for instructor-written reference tests.";
     timeoutMultiplier = 2;
     timeoutInternalPadding = 400;
     assignmentOptions = (
+        {
+            property    = testRules;
+            type        = file;
+            fileTypes   = ( rule );
+            name        = "Cppcheck rule file";
+            description =
+  "A Cppcheck rule file. Add rules in xml and regular expression format for
+  additional check.";
+        },
         {
             property    = testCases;
             type        = fileOrDir;
@@ -161,22 +170,6 @@ tests, and support for instructor-written reference tests.";
   files are deleted when a given submission has been completely processed.
   This setting is provided for debugging purposes, when one wishes to
   inspect the intermediate test driver source code or other derived files.";
-        }
-    );
-    globalOptions = (
-        {
-            property    = bullseyeDir;
-            type        = shortText;
-            size        = 40;
-            name        = "Bullseye Directory";
-            description =
-  "The directory on the local server that contains the Bullseye coverage
-  tool installation (this directory will contain the \"bin\", \"include\",
-  and \"lib\" directories for Bullseye, among others). If you do not have a
-  copy of Bullseye or wish to disable code coverage collection across all
-  assignments, you can leave this field blank. If you are not the user
-  administering this Web-CAT server, you will need to have your system
-  administrator install this tool and set this path if you wish to use it.";
         }
     );
 }

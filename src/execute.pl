@@ -140,6 +140,17 @@ sub findScriptPath
     die "cannot file user script data file $subpath in $scriptData";
 }
 
+# cppcheck rule file
+my $cppcheckRuleFile;
+{
+    my $p = $cfg->getProperty( 'testRules' );
+    if ( defined $p && $p ne "" )
+    {
+        $cppcheckRuleFile = findScriptPath( $p );
+        $cfg->setProperty( 'cppcheckRuleFile.abs', $cppcheckRuleFile );
+    }
+}
+
 # testCases
 my $testCasePath = "${script_home}/tests";
 {

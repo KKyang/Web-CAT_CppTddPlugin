@@ -1,4 +1,7 @@
-<project name="web-cat" default="run">
+<project name="web-cat" default="run"
+ xmlns:if="ant:if"
+ xmlns:unless="ant:unless"
+>
 
     <!-- ============================================================
          Property Definitions
@@ -109,7 +112,11 @@
     
     <target name="checkStudentStyle"
         description="check using cppcheck from student's submission">
+        <available file="${cppcheckRuleFile.abs}" property="ruleRead"/>
+        <echo message="${cppcheckRuleFile.abs}" if:set="ruleRead"/>
     <exec executable="cppcheck">
+        <arg value ="--rule-file=${cppcheckRuleFile.abs}" if:set="ruleRead"/>
+        <!--arg value="rule=&quot;.+&quot;"/-->
         <arg value="--enable=all"/>
         <arg value="${basedir}"/>
     </exec>
