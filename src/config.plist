@@ -1,13 +1,13 @@
 {
     name             = CppTddPlugin;
     version.major    = 2;
-    version.minor    = 3;
-    version.revision = 2;
-    version.date     = 20080415;
+    version.minor    = 4;
+    version.revision = 0;
+    version.date     = 20160410;
     autoPublish      = true;
     requires         = ( ANTForPlugins, PerlForPlugins );
-    provider         = "Virginia Tech Computer Science";
-    provider.url     = "http://web-cat.cs.vt.edu/updates";
+    provider         = "Virginia Tech Computer Science Revised by Yangwen Huang";
+    provider.url     = "https://github.com/KKyang/Web-CAT_CppTddPlugin";
     license          = "GNU Affero General Public License v.3";
     license.url      = "http://www.gnu.org/licenses/agpl.html";
     copyright        = "(c) 2006-2008 Virginia Tech Department of Computer Science";
@@ -17,7 +17,7 @@
     interpreter.prefix = "${PerlForPlugins.perl.exe}";
     author     = "Stephen Edwards (edwards@cs.vt.edu)";
     authorUid  = edwards;
-    languages  = ( { name = "C++"; version = "g++ 3.4.x"; } );
+    languages  = ( { name = "C++"; version = "g++ 3.4.x / 4.x.x"; } );
     description = "This is the standard C++ one-step grading script.
 It includes ANT-based compilation, CxxTest processing of student-written
 tests, and support for instructor-written reference tests.";
@@ -81,6 +81,7 @@ tests, and support for instructor-written reference tests.";
         }
     );
     optionCategories = (
+	    "cppcheck Settings",
         "C++ Settings",
         "Scoring Settings",
         "Feedback Settings",
@@ -97,6 +98,16 @@ tests, and support for instructor-written reference tests.";
   student's code (as well as instructor reference tests).  This directory
   appears later on the include path than the assignment-specific configuration
   setting.  The default is to use no path.";
+        },
+	    {
+            property    = cppcheckComments;
+            type        = boolean;
+            default     = false;
+            name        = "cppcheck check if there are comments";
+            category    = "cppcheck Settings";
+            description =
+  "Check if student written any comment in their submissions. Works only if the
+  cppcheck rule file is loaded.";
         },
         {
             property    = generalLib;
