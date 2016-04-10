@@ -100,14 +100,13 @@ tests, and support for instructor-written reference tests.";
   setting.  The default is to use no path.";
         },
 	    {
-            property    = cppcheckComments;
+            property    = cppcheckSpecialRules;
             type        = boolean;
             default     = false;
-            name        = "cppcheck check if there are comments";
+            name        = "cppcheck check if there are special rules";
             category    = "cppcheck Settings";
             description =
-  "Check if student written any comment in their submissions. Works only if the
-  cppcheck rule file is loaded.";
+  "Check special rules. (not complete)";
         },
         {
             property    = generalLib;
